@@ -1,0 +1,19 @@
+load_tweets = LOAD'/user/flume/tweets/' USING com.twitter.elephantbird.pig.load.JsonLoader('-nestedLoad')AS myTweets;
+
+extract_tweets = foreach load_tweets generate myTweets#'id' as id,myTweets#'text' as text;
+
+tokens = foreach extract_tweets generate id,text,FLATTEN(TOKENIZE(text)) as word;
+
+dictonary = load'/AFINN.txt' using PigStorage('\t') as(word:chararray,rating:int); 
+
+word_rating = join tokens by word left outer,dictonary by word using 'replicated';
+
+rating = foreach word_rating generate token::id as id,token::text as text,dictonary::rating as rate;
+
+word_group = group rating by (id,text);
+
+avg_rate = foreach word_group generate group,AVG(rating.rate)as tweet_rating;
+
+positive_tweets = filter avg_rate by tweet_rating>=0;
+
+Dump positive_tweets
